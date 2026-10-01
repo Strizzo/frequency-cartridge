@@ -1,0 +1,14 @@
+[
+  "LICENSE",
+  "assets/attribution.json",
+  "assets/icon.png",
+  "assets/pin-selected.png",
+  "assets/pin.png",
+  "assets/world.png",
+  "cartridge.json",
+  "directory.lua",
+  "icon.png",
+  "main.lua",
+  "station.lua",
+  "view.lua"
+]
