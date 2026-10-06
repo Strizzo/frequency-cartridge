@@ -41,15 +41,27 @@ function A:cursor() return self:project(90-self.v*180,self.u*360-180) end
 function A:set_cursor(lat,lon)
     if finite(lat) and finite(lon) then self.u=clamp((lon+180)/360,0,1-1e-9);self.v=clamp((90-lat)/180,0,1-1e-9) end
 end
-function A:move(direction)
-    local delta=24
-    if direction=='dpad_left' then self.u=self.u-delta/(W*self.zoom)
-    elseif direction=='dpad_right' then self.u=self.u+delta/(W*self.zoom)
-    elseif direction=='dpad_up' then self.v=self.v-delta/(H*self.zoom)
-    elseif direction=='dpad_down' then self.v=self.v+delta/(H*self.zoom) end
-    self.u=clamp(self.u,0,1-1e-9);self.v=clamp(self.v,0,1-1e-9)
+-- Pixel speed is independent of zoom. Keep fractional movement, but report only
+-- a changed image pixel (cursor or viewport) so tiny inputs do not redraw/scan.
+function A:pan_pixels(dx,dy)
+    if not finite(dx) or not finite(dy) then return false end
+    local w,h=W*self.zoom,H*self.zoom
+    local x,y=math.floor(self.u*w),math.floor(self.v*h)
+    self.u=clamp(self.u+dx/w,0,1-1e-9);self.v=clamp(self.v+dy/h,0,1-1e-9)
+    return x~=math.floor(self.u*w) or y~=math.floor(self.v*h)
 end
-function A:magnify(delta) self.zoom=clamp(self.zoom*(delta>0 and 2 or 0.5),1,8) end
+function A:move(direction)
+    if direction=='dpad_left' then return self:pan_pixels(-24,0)
+    elseif direction=='dpad_right' then return self:pan_pixels(24,0)
+    elseif direction=='dpad_up' then return self:pan_pixels(0,-24)
+    elseif direction=='dpad_down' then return self:pan_pixels(0,24) end
+    return false
+end
+function A:magnify(delta)
+    local old=self.zoom
+    self.zoom=clamp(self.zoom*(delta>0 and 2 or 0.5),1,8)
+    return self.zoom~=old
+end
 function A:country(code)
     if code=='' then self.zoom=1;self.u=0.5;self.v=0.5;return end
     local lat,lon={},{}

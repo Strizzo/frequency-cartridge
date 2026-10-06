@@ -2,12 +2,12 @@
 
 The default branch is `main`. Release tags are `vMAJOR.MINOR.PATCH`, matching
 `cartridge.json` exactly. The app ID is fixed at `dev.cartridge.frequency` and this
-release line requires `min_runtime: "0.6.0"`. Update the manifest version and
+release line requires `min_runtime: "0.6.2"`. Update the manifest version and
 release notes, review `package-files.json`, and run the README checks before
 committing and pushing a new tag.
 
 ```sh
-python3 tools/package.py --tag v1.1.0
+python3 tools/package.py --tag v1.2.0
 (cd dist && shasum -a 256 -c SHA256SUMS)
 ```
 
@@ -34,9 +34,9 @@ overwritten automatically. Use a new version for changed payloads.
 After publishing, verify the downloaded assets, not just local build output:
 
 ```sh
-gh release download v1.1.0 --repo Strizzo/frequency-cartridge --dir verified-release
+gh release download v1.2.0 --repo Strizzo/frequency-cartridge --dir verified-release
 (cd verified-release && shasum -a 256 -c SHA256SUMS)
-gh api repos/Strizzo/frequency-cartridge/commits/v1.1.0 --jq .sha
+gh api repos/Strizzo/frequency-cartridge/commits/v1.2.0 --jq .sha
 ```
 
 Use the published `release.json` and resolved tag commit as the Store catalog
@@ -45,9 +45,10 @@ A catalog signature is managed by Cartridge, outside this app repository.
 
 ## Refreshing the bundled world atlas
 
-`atlas_data.lua` and `assets/atlas/` are reviewed release assets. Refresh them
-when preparing an app release, not at startup. Install Pillow in a development
-virtual environment and run:
+`atlas_data.lua` and `assets/atlas/` are reviewed release assets. Frequency 1.2.0
+reuses the 1.1.0 atlas unchanged; a controls-only release needs no asset rebuild.
+Refresh them only when intentionally updating the geographic snapshot, not at
+startup. Install Pillow in a development virtual environment and run:
 
 ```sh
 python3 -m venv /tmp/frequency-atlas-builder

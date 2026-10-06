@@ -19,6 +19,10 @@ is `media`; `icon.png` is an original illustrated tuning dial.
 
 | Input | Action |
 | --- | --- |
+| Left stick | In map mode, proportional pan with negative y pointing up. In lists, menus, countries and settings, navigate like the D-pad, including country paging and volume adjustment. |
+| Right stick up/down | Map zoom in/out, one 1×/2×/4×/8× step per tilt; recenter between steps. |
+| Simulator I/J/K/L | Left stick up/left/down/right. |
+| Simulator T/F/G/H | Right stick up/left/down/right. |
 | D-pad up/down | Select stations; move through menus and countries. |
 | D-pad left | Open Countries from a station list. |
 | D-pad right | Enter the worldwide map; center on the selected station if it has coordinates. |
@@ -40,6 +44,36 @@ adjusts the selected Volume row. A on custom stream opens a URL keyboard;
 submitting a valid direct HTTP(S) URL explicitly starts it and opens Recent. Custom streams can be
 saved from Recent. Details shows the selected record's location, supplied
 coordinates, codec, bitrate, tags, languages and homepage; unknowns stay unknown.
+
+## Stick runtime contract
+
+Frequency 1.2.0 requires `min_runtime: "0.6.2"` and defines optional
+`on_stick(stick, x, y)`: `stick` is `left` or `right`; axes are finite numbers in
+[-1, 1], with negative y pointing up. The runtime has already applied its radial
+deadzone. It sends changed states, including return to zero, and keeps
+`on_update(dt)` at 30 Hz while a stick is held. Defining this callback opts out of
+the runtime's legacy left-stick-to-D-pad translation, so Frequency handles its
+own left-stick navigation in every browsing/menu/settings view. Digital
+`on_input` controls remain available.
+
+Map pan integrates both axes at 180 viewport pixels/second at full deflection,
+scaled by dt and zoom; diagonal magnitude is capped at full stick speed and
+small deflections retain fractional pixel movement. Motion
+and navigation repeat use at most 100 ms per update. Invalid/negative dt produces
+no motion; finite elapsed time still drives directory deadlines and notices.
+Malformed or out-of-range axes stop that stick and require a valid zero state
+before reuse. Unknown stick names are ignored.
+
+Zoom engages at |y| >= 0.6, releases its latch at |y| <= 0.3, and takes one step
+per tilt even at a zoom limit. Holding, threshold noise and a direct up-to-down
+reversal do not take another step until recentered. Horizontal right-stick input
+does not zoom. Non-map navigation uses the dominant left-stick axis (vertical on
+ties), the same 0.6/0.3 hysteresis, a 350 ms first repeat delay and 150 ms repeats.
+
+Opening/closing a menu or keyboard and changing views clears navigation/motion.
+A stick already held must reach (0, 0) before acting in the new view; fresh
+left-stick input still navigates the menu. Keyboard input suspends both sticks.
+Releasing the keyboard or returning to the map never resumes an old pan.
 
 ## Directory and playback behavior
 
@@ -157,8 +191,13 @@ and names are contributor-supplied, so geographic precision and availability
 are not guaranteed. No coordinates are invented for stations missing them.
 The map shows geographic density clusters; multiple stations can share a dot.
 The nearest-station list includes up to 100 records from a 5° spatial index.
-Moving or zooming recomputes that list only when input changes the cursor,
-not on every render. Dense regions remain navigable by moving the cursor closer.
+Moving recomputes that list only after the cursor/viewport crosses an image
+pixel; zoom recomputes only when its level changes. Held analog pan refreshes
+nearby stations at most 10 times per second, with a final refresh on release and
+an immediate refresh before choosing/tuning a station. Every visual move cancels
+pending tuning immediately, including between refreshes. Idle, subpixel and
+clamped boundary motion do not scan or redraw. Dense regions remain navigable by
+moving the cursor closer.
 
 Pressing A looks up `/json/stations/byuuid/{uuid}` asynchronously and applies the
 existing stream/codec validation before playback. The result must match the
@@ -210,9 +249,18 @@ for the fetch, validation and reproducibility workflow. The original artwork gen
 rows and cached images. It uses opaque rectangular primitives, avoiding the
 software renderer's SDL_gfx rounded-shape color issue. Error/notice space reduces
 the station list to two rows so text does not overlap. There is no continuous
-animation and no unconditional redraw from `on_update`; idle is 5 Hz.
+animation and no unconditional redraw from `on_update`; idle is 5 Hz and held
+sticks receive 30 Hz updates from the runtime.
 
 ## Checks and native screenshots
+
+`lua tests/app_sticks.lua` exercises the actual lifecycle with stubbed native
+services: neutral/no-redraw, finite axes/dt, fractional and diagonal pan, zoom
+hysteresis, bounded nearest refresh, immediate tune cancellation, recenter gates,
+non-map navigation and digital compatibility. It complements `tests/atlas.lua`
+and `tests/app_atlas.lua`; it does not establish native 30 Hz delivery or keyboard
+bindings. Native runtime/controller validation for 1.2.0 remains a separate
+Cartridge integration step.
 
 The independent mlua suite stubs HTTP, storage, keyboard and native audio while
 running the actual cartridge modules and lifecycle callbacks:
@@ -257,8 +305,10 @@ stereo up to 96 kHz. It does not support HLS, HE-AAC or Opus. Broadcaster access
 TLS, redirects, incorrect directory codec labels and region restrictions can still
 prevent playback; choose another station when a retry fails. No promise is made
 that every candidate is decodable or continuously online. Search is by station
-name, with separate country and curated genre filters. Map navigation covers pins
-on the current page, without zoom or clustering. Refresh and paging are explicit.
+name, with separate country and curated genre filters. The bundled worldwide
+map has four zoom levels and density clusters; nearest stations come from that
+snapshot independently of live search pages. Directory refresh and paging are
+explicit.
 
 A live end-to-end run explicitly played Sports Radio Brila FM (an MP3 candidate),
 then paused, resumed and stopped it. Native screenshots captured `CONNECTING`,

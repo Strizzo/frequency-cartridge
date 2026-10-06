@@ -27,9 +27,9 @@ end
 local function footer(s)
     rect(0,684,720,36,C.paper);line(24,684,696,684)
     if s.focus=='map' and (s.view=='explore' or s.view=='favorites' or s.view=='recent') and not s.menu then
-        hint('D-PAD','Move',24,694);hint('X/Y','Zoom',171,694);hint('L1/R1','Station',307,694);hint('A','Tune',492,694);hint('B','List',610,694)
+        hint('LS','Pan',24,694);hint('RS','Zoom',124,694);hint('L1/R1','Station',256,694);hint('A','Tune',467,694);hint('B','List',590,694)
     elseif s.menu or s.view=='settings' or s.view=='about' or s.view=='details' then
-        hint('A','Choose',24,694);hint('B','Back',154,694);hint('L2/R2','Volume',274,694);hint('SELECT','Quit',538,694)
+        hint('A','Choose',24,694);hint('B','Back',154,694);hint('LS','Move',274,694);hint('L2/R2','Volume',382,694);hint('SELECT','Quit',554,694)
     elseif s.view=='countries' then
         hint('A','Country / retry',24,694);hint('Y','Find',226,694);hint('B','Back',348,694);hint('START','Menu',538,694)
     else
@@ -106,9 +106,9 @@ local function map(s,rows,Station)
     text((atlas and #atlas.records or 0)..' locations / '..(atlas and atlas.countries or 0)..' countries',35,409,11,C.muted)
     text(atlas and atlas.date or '',590,409,10,C.muted)
     if s.focus=='map' then
-        text('D-PAD moves   X/Y zoom   L1/R1 stations',24,438,12,C.dim)
+        text('LS/D-PAD pan   RS up/down zoom; recenter   X/Y zoom   L1/R1 stations',24,438,12,C.dim)
     else
-        text('UP/DOWN stations   LEFT countries   RIGHT map',24,438,12,C.dim)
+        text('LS / D-PAD: UP/DOWN stations, LEFT countries, RIGHT map',24,438,12,C.dim)
         text('L1/R1 genre',588,438,11,C.dim)
     end
 end
@@ -157,9 +157,9 @@ local function explorer(s,rows,Station)
 end
 local function countries(s)
     heading('Choose a country',24,113,38)
-    text('Stations without coordinates are included here.',25,162,15,C.dim)
+    text('LS / D-PAD selects. Stations without coordinates stay here.',25,162,15,C.dim)
     text(s.country_filter~='' and ('FILTER: '..s.country_filter) or 'Y to find a country by name',25,190,13,C.orange,true,650)
-    local status=s.country_loading and 'Loading countries...' or s.country_error and 'OFFLINE / A on first row retries' or 'LEFT / RIGHT pages  ·  Page '..(math.floor(s.country_offset/100)+1)
+    local status=s.country_loading and 'Loading countries...' or s.country_error and 'OFFLINE / A on first row retries' or 'LS / D-PAD left/right pages  ·  Page '..(math.floor(s.country_offset/100)+1)
     text(status,25,219,13,C.dim,true,665)
     local first=math.max(1,math.min(s.country_cursor-3,#s.countries-6))
     for i=first,math.min(#s.countries,first+6) do
@@ -174,7 +174,7 @@ local function countries(s)
 end
 local function settings(s)
     heading('Your receiver',24,113,38)
-    text('Small controls. A much bigger world.',25,163,16,C.dim)
+    text('LS / D-PAD selects; left/right adjusts Volume.',25,163,16,C.dim)
     for i,label in ipairs(s.settings_items) do
         local y=212+(i-1)*65;local chosen=i==s.settings_cursor
         rect(24,y,672,55,chosen and C.cream or C.paper,4)

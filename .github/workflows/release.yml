@@ -34,6 +34,7 @@ jobs:
           lua5.4 tests/unit.lua
           lua5.4 tests/atlas.lua
           lua5.4 tests/app_atlas.lua
+          lua5.4 tests/app_sticks.lua
       - name: Test package integrity and reproducibility
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Build package and verify checksums

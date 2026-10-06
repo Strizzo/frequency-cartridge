@@ -3,6 +3,10 @@ local Directory = require('directory')
 local View = require('view')
 local Atlas = require('atlas')
 local PAGE = 100
+local PAN_SPEED,MAX_STICK_DT,MAP_REFRESH = 180,0.1,0.1
+local STICK_TRIGGER,STICK_RELEASE,NAV_DELAY,NAV_REPEAT = 0.6,0.3,0.35,0.15
+local function finite(n) return type(n)=='number' and n==n and math.abs(n)<math.huge end
+local sticks={left={x=0,y=0},right={x=0,y=0}}
 local S = {
     view='explore', focus='list', selected=1, stations={}, favorites={}, recent={},
     genre=1, genres={'All sounds','Jazz','Classical','Ambient','Electronic','Rock','Pop','News','World','Soul'},
@@ -13,6 +17,7 @@ local S = {
     menu=false, menu_cursor=1, menu_items={'Explore','Countries','Favorites','Recent','Settings','Refresh directory','Next page','Previous page','Station details','Save station'},
     settings_cursor=1, settings_items={'Volume','Play a custom stream','About Frequency','Clear recent history'},
     atlas=nil, map_rows={}, map_selected=1, map_generation=0, map_loading=false, map_cache={}, map_cache_order={},
+    map_dirty=false, map_refresh=0,
     volume=0.7, player=nil, status={state='stopped',error=''}, keyboard=nil,
     notice=nil, notice_time=0, initialized=false, alive=true,
 }
@@ -36,9 +41,69 @@ local function selected()
     if S.focus=='map' then return S.map_rows[S.map_selected] end
     return list()[S.selected]
 end
+local function cancel_map_tune()
+    S.map_generation=S.map_generation+1;S.map_loading=false
+end
+local function refresh_map_rows()
+    S.map_selected=1;S.map_rows=S.atlas:nearest(100)
+    S.map_dirty=false;S.map_refresh=MAP_REFRESH
+end
 local function map_changed()
-    S.map_generation=S.map_generation+1;S.map_loading=false;S.map_selected=1
-    S.map_rows=S.atlas:nearest(100);redraw()
+    cancel_map_tune();refresh_map_rows();redraw()
+end
+local function flush_map_rows()
+    if S.map_dirty then refresh_map_rows();redraw() end
+end
+local function clear_sticks()
+    flush_map_rows()
+    for _,stick in pairs(sticks) do
+        -- Runtime sends changed states only. A held stick must return to neutral
+        -- before it can act in a new view, even if later noise changes its axes.
+        stick.blocked=stick.blocked or stick.x~=0 or stick.y~=0
+        stick.nav=nil;stick.delay=0;stick.latched=false
+    end
+end
+local function map_active()
+    return S.focus=='map' and not S.menu and not S.keyboard and
+        (S.view=='explore' or S.view=='favorites' or S.view=='recent')
+end
+local function nav_direction(stick)
+    local x,y=stick.x,stick.y
+    if math.max(math.abs(x),math.abs(y))>=STICK_TRIGGER then
+        if math.abs(y)>=math.abs(x) then return y<0 and 'dpad_up' or 'dpad_down' end
+        return x<0 and 'dpad_left' or 'dpad_right'
+    end
+    local held=({dpad_up=-y,dpad_down=y,dpad_left=-x,dpad_right=x})[stick.nav]
+    if held and held>STICK_RELEASE then return stick.nav end
+end
+local function navigate(button,action)
+    local before={S.selected,S.country_cursor,S.settings_cursor,S.menu_cursor,
+        S.view,S.focus,S.volume,S.country_offset,S.menu}
+    on_input(button,action)
+    local after={S.selected,S.country_cursor,S.settings_cursor,S.menu_cursor,
+        S.view,S.focus,S.volume,S.country_offset,S.menu}
+    for i,value in ipairs(before) do if value~=after[i] then redraw();return end end
+end
+local function update_sticks(dt)
+    S.map_refresh=math.max(0,S.map_refresh-dt)
+    local left=sticks.left
+    if map_active() then
+        if not left.blocked and (left.x~=0 or left.y~=0) then
+            local magnitude=math.sqrt(left.x*left.x+left.y*left.y)
+            local distance=PAN_SPEED*dt/math.max(1,magnitude)
+            if S.atlas:pan_pixels(left.x*distance,left.y*distance) then
+                -- Cancel immediately, even between the bounded nearest-list scans.
+                cancel_map_tune();S.map_dirty=true;redraw()
+            end
+        end
+        if S.map_dirty and S.map_refresh<=0 then refresh_map_rows();redraw() end
+    elseif not S.keyboard and not left.blocked and left.nav and dt>0 then
+        left.delay=left.delay-dt
+        if left.delay<=0 then
+            left.delay=left.delay+NAV_REPEAT
+            navigate(left.nav,'repeat')
+        end
+    end
 end
 local function fingerprint()
     return table.concat({S.country_code,S.query,S.genres[S.genre],tostring(S.offset)},'\n')
@@ -190,19 +255,21 @@ local function volume(delta)
     persist();redraw()
 end
 local function keyboard(kind)
+    clear_sticks();cancel_map_tune()
     S.keyboard=kind
     local labels={search='Search station names (blank clears)',country='Find a country (blank clears)',custom='Play direct HTTP(S) audio URL'}
     text_input.show(labels[kind],kind=='search' and S.query or kind=='country' and S.country_filter or '',false,kind=='custom' and 1024 or 100)
 end
 local function change_view(view)
-    S.map_generation=S.map_generation+1;S.map_loading=false
+    clear_sticks();cancel_map_tune()
     S.view=view;S.selected=1;S.menu=false;S.focus='list'
     if view=='countries' and #S.countries==1 and not S.country_loading then fetch_countries() end
 end
 local function menu_action()
+    clear_sticks();cancel_map_tune()
     local index=S.menu_cursor;S.menu=false
     if index==10 then favorite();return end
-    if index==9 then local item=selected();S.detail=item and (S.map_cache[item.stationuuid] or (not item.atlas and item));if not S.detail then notice('Tune this map station to load its details.');return end;S.view='details';return end
+    if index==9 then local item=selected();S.detail=item and (S.map_cache[item.stationuuid] or (not item.atlas and item));if not S.detail then notice('Tune this map station to load its details.');return end;change_view('details');return end
     if index<=5 then change_view(({'explore','countries','favorites','recent','settings'})[index])
     elseif index==6 then
         if S.view=='countries' then if not S.country_loading then fetch_countries() end
@@ -243,6 +310,10 @@ function on_init()
 end
 function on_update(dt)
     if not S.alive then return end
+    dt=finite(dt) and math.max(0,dt) or 0
+    -- Move/cancel before delivering replies in this update. Runtime 0.6.2 keeps
+    -- updates at 30 Hz while held; idle stays at 5 Hz.
+    update_sticks(math.min(dt,MAX_STICK_DT))
     directory:poll(dt)
     if S.query_delay then
         S.query_delay=S.query_delay-dt
@@ -281,20 +352,52 @@ function on_update(dt)
         if S.notice_time<=0 then S.notice=nil;redraw() end
     end
 end
+-- Axes already have the runtime's radial deadzone, and negative y means up.
+function on_stick(name,x,y)
+    if not S.alive or not S.atlas then return end
+    local stick=sticks[name];if not stick then return end
+    if not finite(x) or not finite(y) or math.abs(x)>1 or math.abs(y)>1 then
+        stick.x=0;stick.y=0;stick.nav=nil;stick.blocked=true
+        if name=='left' then flush_map_rows() end
+        return
+    end
+    stick.x=x;stick.y=y
+    if x==0 and y==0 then
+        stick.blocked=false;stick.nav=nil;stick.latched=false
+        if name=='left' then flush_map_rows() end
+        return
+    end
+    if S.keyboard then stick.blocked=true;stick.nav=nil;return end
+    if stick.blocked then return end
+    if name=='left' then
+        if map_active() then return end
+        local direction=nav_direction(stick)
+        if direction~=stick.nav then
+            stick.nav=direction;stick.delay=NAV_DELAY
+            if direction then navigate(direction,'press') end
+        end
+    elseif map_active() then
+        if math.abs(y)<=STICK_RELEASE then stick.latched=false
+        elseif not stick.latched and math.abs(y)>=STICK_TRIGGER then
+            stick.latched=true
+            if S.atlas:magnify(y<0 and 1 or -1) then map_changed() end
+        end
+    end
+end
 function on_input(button,action)
     if action~='press' and action~='repeat' then return end
     if button=='select' then return end -- Runtime owns quit.
     if action=='repeat' and not button:match('^dpad_') and button~='l2' and button~='r2' then return end
     if button=='l2' then volume(-0.05);return elseif button=='r2' then volume(0.05);return end
-    if button=='start' then S.menu=not S.menu;S.menu_cursor=1;return end
+    if button=='start' then clear_sticks();cancel_map_tune();S.menu=not S.menu;S.menu_cursor=1;return end
     if S.menu then
         if button=='dpad_up' then S.menu_cursor=math.max(1,S.menu_cursor-1)
         elseif button=='dpad_down' then S.menu_cursor=math.min(#S.menu_items,S.menu_cursor+1)
-        elseif button=='a' then menu_action() elseif button=='b' then S.menu=false end
+        elseif button=='a' then menu_action() elseif button=='b' then clear_sticks();S.menu=false end
         return
     end
     if button=='b' then
-        if S.focus=='map' then S.focus='list';S.map_generation=S.map_generation+1;S.map_loading=false
+        if S.focus=='map' then clear_sticks();cancel_map_tune();S.focus='list'
         elseif S.view~='explore' then change_view('explore')
         else stop() end
         return
@@ -307,7 +410,7 @@ function on_input(button,action)
         elseif S.settings_cursor==1 and button=='dpad_right' then volume(0.05)
         elseif button=='a' then
             if S.settings_cursor==2 then keyboard('custom')
-            elseif S.settings_cursor==3 then S.view='about'
+            elseif S.settings_cursor==3 then change_view('about')
             elseif S.settings_cursor==4 then S.recent={};persist();notice('Recent history cleared') end
         end
         return
@@ -328,12 +431,14 @@ function on_input(button,action)
         return
     end
     if S.focus=='map' then
-        if button:match('^dpad_') then S.atlas:move(button);map_changed()
-        elseif button=='x' or button=='y' then S.atlas:magnify(button=='x' and 1 or -1);map_changed()
+        if button:match('^dpad_') then
+            if S.atlas:move(button) then map_changed() end
+        elseif button=='x' or button=='y' then
+            if S.atlas:magnify(button=='x' and 1 or -1) then map_changed() end
         elseif button=='l1' or button=='r1' then
-            S.map_generation=S.map_generation+1;S.map_loading=false
+            flush_map_rows();cancel_map_tune()
             S.map_selected=math.max(1,math.min(#S.map_rows,S.map_selected+(button=='r1' and 1 or -1)))
-        elseif button=='a' then tune_map() end
+        elseif button=='a' then flush_map_rows();tune_map() end
         return
     end
     if button=='y' then keyboard('search');return end
@@ -347,6 +452,7 @@ function on_input(button,action)
     elseif button=='dpad_down' then S.selected=math.min(math.max(1,#list()),S.selected+1)
     elseif button=='dpad_left' then change_view('countries')
     elseif button=='dpad_right' then
+        clear_sticks()
         local station=selected()
         if station and station.geo_lat then S.atlas:set_cursor(station.geo_lat,station.geo_long) end
         S.focus='map';map_changed()
@@ -355,5 +461,6 @@ function on_input(button,action)
 end
 function on_render() View.draw(S,list(),Station) end
 function on_destroy()
+    clear_sticks();cancel_map_tune()
     S.alive=false;directory:close();stop()
 end
