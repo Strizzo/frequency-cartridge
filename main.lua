@@ -1,6 +1,7 @@
 local Station = require('station')
 local Directory = require('directory')
 local View = require('view')
+local Atlas = require('atlas')
 local PAGE = 100
 local S = {
     view='explore', focus='list', selected=1, stations={}, favorites={}, recent={},
@@ -9,8 +10,9 @@ local S = {
     loading=true, stale=false, error=nil, generation=0, query_delay=nil,
     countries={{name='All countries',stationcount=0}}, country_cursor=1,
     country_filter='', country_offset=0, country_more=false, country_loading=false, country_gen=0,
-    menu=false, menu_cursor=1, menu_items={'Explore','Countries','Favorites','Recent','Settings','Refresh directory','Next page','Previous page','Station details'},
+    menu=false, menu_cursor=1, menu_items={'Explore','Countries','Favorites','Recent','Settings','Refresh directory','Next page','Previous page','Station details','Save station'},
     settings_cursor=1, settings_items={'Volume','Play a custom stream','About Frequency','Clear recent history'},
+    atlas=nil, map_rows={}, map_selected=1, map_generation=0, map_loading=false, map_cache={}, map_cache_order={},
     volume=0.7, player=nil, status={state='stopped',error=''}, keyboard=nil,
     notice=nil, notice_time=0, initialized=false, alive=true,
 }
@@ -30,7 +32,14 @@ local function list()
     if S.view=='favorites' then return S.favorites elseif S.view=='recent' then return S.recent end
     return S.stations
 end
-local function selected() return list()[S.selected] end
+local function selected()
+    if S.focus=='map' then return S.map_rows[S.map_selected] end
+    return list()[S.selected]
+end
+local function map_changed()
+    S.map_generation=S.map_generation+1;S.map_loading=false;S.map_selected=1
+    S.map_rows=S.atlas:nearest(100);redraw()
+end
 local function fingerprint()
     return table.concat({S.country_code,S.query,S.genres[S.genre],tostring(S.offset)},'\n')
 end
@@ -138,8 +147,36 @@ local function play(station)
     directory:click(station)
     redraw()
 end
+local function tune_map()
+    if S.map_loading then return end
+    local marker=selected();if not marker then return end
+    local cached=S.map_cache[marker.stationuuid]
+    if cached then play(cached);return end
+    if S.player and S.player.stationuuid==marker.stationuuid then play(S.player);return end
+    S.map_generation=S.map_generation+1
+    local generation=S.map_generation
+    S.map_loading=true;redraw()
+    directory:fetch('/json/stations/byuuid/'..Directory.encode(marker.stationuuid),
+        function() return S.alive and generation==S.map_generation end,
+        function(data,err)
+            S.map_loading=false
+            if not data then notice(err or 'Station details unavailable. Retry A.');return end
+            local resolved
+            for _,raw in ipairs(data) do
+                if type(raw)=='table' and raw.stationuuid==marker.stationuuid then resolved=Station.normalize(raw,false);break end
+            end
+            if not resolved then notice('Stream unavailable or unsupported. L1/R1 chooses another station.');return end
+            if not S.map_cache[resolved.stationuuid] then
+                S.map_cache_order[#S.map_cache_order+1]=resolved.stationuuid
+                if #S.map_cache_order>64 then S.map_cache[table.remove(S.map_cache_order,1)]=nil end
+            end
+            S.map_cache[resolved.stationuuid]=resolved
+            play(resolved)
+        end)
+end
 local function favorite()
     local station=selected();if not station then return end
+    if station.atlas then station=S.map_cache[station.stationuuid] or (S.player and S.player.stationuuid==station.stationuuid and S.player);if not station then notice('Tune this map station before saving it.');return end end
     local i=Station.index(S.favorites,station.stationuuid)
     if i then table.remove(S.favorites,i);notice('Removed from favorites')
     elseif #S.favorites>=100 then notice('Favorites full (100). Remove one to save another.');return
@@ -158,12 +195,14 @@ local function keyboard(kind)
     text_input.show(labels[kind],kind=='search' and S.query or kind=='country' and S.country_filter or '',false,kind=='custom' and 1024 or 100)
 end
 local function change_view(view)
+    S.map_generation=S.map_generation+1;S.map_loading=false
     S.view=view;S.selected=1;S.menu=false;S.focus='list'
     if view=='countries' and #S.countries==1 and not S.country_loading then fetch_countries() end
 end
 local function menu_action()
     local index=S.menu_cursor;S.menu=false
-    if index==9 then S.detail=selected();S.view='details';return end
+    if index==10 then favorite();return end
+    if index==9 then local item=selected();S.detail=item and (S.map_cache[item.stationuuid] or (not item.atlas and item));if not S.detail then notice('Tune this map station to load its details.');return end;S.view='details';return end
     if index<=5 then change_view(({'explore','countries','favorites','recent','settings'})[index])
     elseif index==6 then
         if S.view=='countries' then if not S.country_loading then fetch_countries() end
@@ -179,6 +218,7 @@ local function menu_action()
     end
 end
 function on_init()
+    S.atlas=Atlas.new();map_changed()
     local saved=load('frequency.v1')
     if saved and saved.version==1 then
         S.favorites=Station.list(saved.favorites,100);S.recent=Station.list(saved.recent,30)
@@ -254,8 +294,8 @@ function on_input(button,action)
         return
     end
     if button=='b' then
-        if S.view~='explore' then change_view('explore')
-        elseif S.focus=='map' then S.focus='list'
+        if S.focus=='map' then S.focus='list';S.map_generation=S.map_generation+1;S.map_loading=false
+        elseif S.view~='explore' then change_view('explore')
         else stop() end
         return
     end
@@ -282,9 +322,18 @@ function on_input(button,action)
             if S.country_error and S.country_cursor==1 then fetch_countries()
             else
                 local c=S.countries[S.country_cursor]
-                if c then S.country=S.country_cursor==1 and '' or c.name;S.country_code=S.country_cursor==1 and '' or c.code;S.offset=0;change_view('explore');schedule(true) end
+                if c then S.country=S.country_cursor==1 and '' or c.name;S.country_code=S.country_cursor==1 and '' or c.code;S.atlas:country(S.country_code);map_changed();S.offset=0;change_view('explore');schedule(true) end
             end
         end
+        return
+    end
+    if S.focus=='map' then
+        if button:match('^dpad_') then S.atlas:move(button);map_changed()
+        elseif button=='x' or button=='y' then S.atlas:magnify(button=='x' and 1 or -1);map_changed()
+        elseif button=='l1' or button=='r1' then
+            S.map_generation=S.map_generation+1;S.map_loading=false
+            S.map_selected=math.max(1,math.min(#S.map_rows,S.map_selected+(button=='r1' and 1 or -1)))
+        elseif button=='a' then tune_map() end
         return
     end
     if button=='y' then keyboard('search');return end
@@ -294,17 +343,14 @@ function on_input(button,action)
         S.genre=((S.genre-1+(button=='r1' and 1 or -1))%#S.genres)+1
         S.offset=0;change_view('explore');schedule(true);return
     end
-    if S.focus=='map' then
-        if button:match('^dpad_') then S.selected=Station.neighbor(list(),S.selected,button) end
-    elseif button=='dpad_up' then S.selected=math.max(1,S.selected-1)
+    if button=='dpad_up' then S.selected=math.max(1,S.selected-1)
     elseif button=='dpad_down' then S.selected=math.min(math.max(1,#list()),S.selected+1)
     elseif button=='dpad_left' then change_view('countries')
     elseif button=='dpad_right' then
-        local pin=Station.neighbor(list(),0,'dpad_right')
-        if list()[pin] and Station.project(list()[pin]) then
-            S.focus='map'
-            if not Station.project(selected()) then S.selected=pin end
-        else notice('No coordinates on this page. Stations are available in the list.') end
+        local station=selected()
+        if station and station.geo_lat then S.atlas:set_cursor(station.geo_lat,station.geo_long) end
+        S.focus='map';map_changed()
+
     end
 end
 function on_render() View.draw(S,list(),Station) end

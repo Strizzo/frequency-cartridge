@@ -146,6 +146,17 @@ class PackageTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Missing"):
                     packager.validate(self.root)
 
+    def test_numeric_tile_patterns_require_matching_inventory(self):
+        entry = self.root / "main.lua"
+        original = entry.read_text()
+        entry.write_text(original + "\nscreen.draw_image(string.format('assets/atlas/z%d-%d-%d.png', 1, 0, 0), 0, 0)")
+        packager.validate(self.root)
+        for pattern in ("assets/atlas/missing-%d.png", "assets/atlas/z%s-%d-%d.png"):
+            with self.subTest(pattern=pattern):
+                entry.write_text(original + f"\nscreen.draw_image('{pattern}', 0, 0)")
+                with self.assertRaisesRegex(ValueError, "Missing asset"):
+                    packager.validate(self.root)
+
     def test_rejects_symlinks_and_hardlinks(self):
         target = self.root / "main.lua"
         target.unlink()

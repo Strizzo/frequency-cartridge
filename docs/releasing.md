@@ -7,7 +7,7 @@ release notes, review `package-files.json`, and run the README checks before
 committing and pushing a new tag.
 
 ```sh
-python3 tools/package.py --tag v1.0.0
+python3 tools/package.py --tag v1.1.0
 (cd dist && shasum -a 256 -c SHA256SUMS)
 ```
 
@@ -34,11 +34,37 @@ overwritten automatically. Use a new version for changed payloads.
 After publishing, verify the downloaded assets, not just local build output:
 
 ```sh
-gh release download v1.0.0 --repo Strizzo/frequency-cartridge --dir verified-release
+gh release download v1.1.0 --repo Strizzo/frequency-cartridge --dir verified-release
 (cd verified-release && shasum -a 256 -c SHA256SUMS)
-gh api repos/Strizzo/frequency-cartridge/commits/v1.0.0 --jq .sha
+gh api repos/Strizzo/frequency-cartridge/commits/v1.1.0 --jq .sha
 ```
 
 Use the published `release.json` and resolved tag commit as the Store catalog
 input. GitHub's auto-generated Source code archives are not installable payloads.
 A catalog signature is managed by Cartridge, outside this app repository.
+
+## Refreshing the bundled world atlas
+
+`atlas_data.lua` and `assets/atlas/` are reviewed release assets. Refresh them
+when preparing an app release, not at startup. Install Pillow in a development
+virtual environment and run:
+
+```sh
+python3 -m venv /tmp/frequency-atlas-builder
+/tmp/frequency-atlas-builder/bin/pip install Pillow
+/tmp/frequency-atlas-builder/bin/python tools/build_atlas.py
+```
+
+The builder fetches Radio Browser's geolocated, non-broken station records from
+official mirrors, caps input bytes/time/record count, and verifies the pinned
+Natural Earth source. Only UUID, latitude, longitude, country code and sanitized
+name enter the Lua snapshot; stream URLs are resolved live when tuning.
+`assets/attribution.json` records source hashes, dates, per-country counts,
+projection, tile bounds and hashes. Rebuild from a saved response using
+`--stations-json FILE --shapes FILE --built-at YYYY-MM-DD --fetched-at UTC-TIME`.
+Do not commit the full upstream response, private URLs or developer fixtures.
+
+The generated tile inventory is fixed at 85 RGB PNGs for zooms 1, 2, 4 and 8.
+Review coverage and country counts, then update `package-files.json` if the
+runtime inventory changes. Independent asset tests need only Python's standard
+library; Pillow is not needed by CI validation, installation or the handheld.

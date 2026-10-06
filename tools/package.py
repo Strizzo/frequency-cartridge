@@ -118,7 +118,14 @@ def validate(root, tag=None):
                 if module.replace(".", "/") + ".lua" not in payload:
                     raise ValueError(f"Missing Lua module: {module} (from {name})")
             for asset in re.findall(r"['\"](assets/[^'\"]+)['\"]", code):
-                if asset not in payload:
+                if "%d" in asset:
+                    # Only numeric printf fields are allowed for baked tile names.
+                    # Inventory validation still requires every generated asset.
+                    pattern = re.escape(asset).replace("%d", r"[0-9]+")
+                    present = any(re.fullmatch(pattern, path) for path in payload)
+                else:
+                    present = asset in payload
+                if not present:
                     raise ValueError(f"Missing asset: {asset} (from {name})")
     return manifest, payload
 
