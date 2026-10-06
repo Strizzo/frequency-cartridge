@@ -30,7 +30,10 @@ jobs:
       - name: Check Lua syntax
         run: find . -type f -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -n 1 luac5.4 -p
       - name: Test independent Lua behavior
-        run: lua5.4 tests/unit.lua
+        run: |
+          lua5.4 tests/unit.lua
+          lua5.4 tests/atlas.lua
+          lua5.4 tests/app_atlas.lua
       - name: Test package integrity and reproducibility
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Build package and verify checksums

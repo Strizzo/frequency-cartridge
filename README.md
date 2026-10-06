@@ -1,16 +1,18 @@
 # Frequency
 
-A controller-operated atlas of internet radio. Browse Radio Browser by country,
-genre or station name, navigate reported map locations, save favorites, and play
-streams directly from broadcasters. Map pins appear only where the directory
-provides coordinates; stations without coordinates remain available in the list.
+A controller-operated atlas of internet radio. The bundled world map contains
+**13,179 reported station locations across 182 country codes**, including
+**215 in Italy** (snapshot: 7 October 2026). Coverage appears immediately and stays
+visible offline. Country, genre and name searches use Radio Browser's live
+100-record pages independently of the map. Stations without coordinates remain
+available through search; the app never substitutes invented locations.
 
-- D-pad: choose stations or navigate the map/menus.
-- A: play, pause or resume. B: stop or go back.
-- X: save/remove a favorite. Y: search.
-- L1/R1: genre. L2/R2: volume.
-- Start: countries, favorites, history, paging, settings and station details.
-- Select: exit; when the keyboard is open, cancel editing instead.
+- In the station list: D-pad selects stations; Right enters the map; Left opens countries.
+- On the map: D-pad moves the cursor; X/Y zoom in/out at 1×, 2×, 4× and 8×.
+- L1/R1 choose nearby map stations; A fetches current stream details and tunes; B returns to the list.
+- In lists: A plays/pauses, X saves a favorite, Y searches, and L1/R1 change genre.
+- L2/R2 adjust volume. Start opens the menu, including Save station for map selections.
+- Select exits; when the keyboard is open, cancel editing instead.
 
 The app never autoplays on launch. Favorites and the last directory page are
 cached, but listening needs internet access. Failed stations can be retried or
@@ -52,8 +54,10 @@ Python 3.12+ and Lua 5.4 are sufficient for the independent checks:
 python3 tools/package.py --check
 find . -type f -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -n 1 luac -p
 lua tests/unit.lua
+lua tests/atlas.lua
+lua tests/app_atlas.lua
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-python3 tools/package.py --tag v1.0.0
+python3 tools/package.py --tag v1.1.0
 ```
 
 On Linux, Lua executables may be named `lua5.4` and `luac5.4`.

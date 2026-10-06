@@ -6,7 +6,8 @@ The historical verification results below were recorded in that source checkout;
 they are not claims that this repository reruns the full runtime or hardware suite.
 App files now live at this repository's root. **All `cargo`, `app-check`, `sim/`,
 `crates/`, and `lua_cartridges/` test paths below refer to a separate Cartridge
-checkout**, with its bundled app synchronized to this release. Run those commands
+checkout**. Pass this independent app's absolute path to `app-check`; the historical
+`cargo test` suite tests the runtime checkout's bundled version. Run those commands
 from that checkout. This repository's independent checks are in the [README](../README.md#development-and-releases).
 
 Frequency is a 720×720 controller radio atlas; its app files are at the repository root.
@@ -20,19 +21,19 @@ is `media`; `icon.png` is an original illustrated tuning dial.
 | --- | --- |
 | D-pad up/down | Select stations; move through menus and countries. |
 | D-pad left | Open Countries from a station list. |
-| D-pad right | Enter map navigation. Only reported station coordinates become pins. |
-| D-pad in map mode | Select the nearest pin in that direction, preferring alignment. B returns to the list. |
+| D-pad right | Enter the worldwide map; center on the selected station if it has coordinates. |
+| D-pad in map mode | Move the cursor and pan; X/Y zoom in/out (1×, 2×, 4×, 8×); L1/R1 choose nearby stations; A resolves current details and tunes. B returns to the list. |
 | A | Start the selected station; pause/resume that same station; retry it after error/end. With an empty failed directory, retry the directory. |
 | B | Close the menu, return from map or another view, or stop audio while on Explore's station list. |
-| X | Add/remove the selected favorite. |
-| Y | On-screen station-name search; in Countries, country-name search. Submit blank text to clear the filter. |
-| L1/R1 | Previous/next genre; applies to the directory and returns to Explore. |
+| X | In lists, add/remove the selected favorite. On the map, zoom in; use Start → Save station after tuning to favorite a map station. |
+| Y | In lists, station-name search; in Countries, country-name search. On the map, zoom out. Submit blank text to clear a search filter. |
+| L1/R1 | In lists, previous/next genre; on the map, choose the previous/next nearby station. |
 | L2/R2 | Volume down/up by 5%, clamped to 0–100%, on every app screen. |
 | Start | Open/close the menu. Opening always selects its first row. |
 | Select | Runtime-owned exit; `on_destroy` stops streaming. |
 
 The menu order is stable: **1 Explore, 2 Countries, 3 Favorites, 4 Recent,
-5 Settings, 6 Refresh directory, 7 Next page, 8 Previous page, 9 Station details**.
+5 Settings, 6 Refresh directory, 7 Next page, 8 Previous page, 9 Station details, 10 Save station**.
 D-pad left/right pages through the country list. Settings rows are **1 Volume,
 2 Play a custom stream, 3 About Frequency, 4 Clear recent history**. Left/right
 adjusts the selected Volume row. A on custom stream opens a URL keyboard;
@@ -57,7 +58,8 @@ its own timeout. Late replies to timed-out requests are discarded.
 
 Station and country pages are limited to **100 records**, fetched on demand.
 A full page enables manual next-page navigation; no background crawl or full
-world station download occurs. The app keeps one directory page in memory and
+world station download occurs on the handheld. The bundled geographic snapshot
+is separate from these search pages and does not limit map coverage to 100 dots. The app keeps one directory page in memory and
 one persistent page cache. A response larger than requested is still capped at
 100 records. At most 16 application requests are tracked at once. Request-queue
 errors are caught. Filter changes are debounced by 250 ms, use generation IDs,
@@ -147,9 +149,40 @@ changes will last only for the current session.
 are `frequency.v1.json` and `frequency.cache.v1.json` inside the app's `data`
 directory; a key spelling change is not needed.
 
+## Worldwide atlas
+
+`atlas_data.lua` contains 13,179 real station-coordinate records, covering
+182 country codes including 215 Italy records (7 October 2026). Coordinates
+and names are contributor-supplied, so geographic precision and availability
+are not guaranteed. No coordinates are invented for stations missing them.
+The map shows geographic density clusters; multiple stations can share a dot.
+The nearest-station list includes up to 100 records from a 5° spatial index.
+Moving or zooming recomputes that list only when input changes the cursor,
+not on every render. Dense regions remain navigable by moving the cursor closer.
+
+Pressing A looks up `/json/stations/byuuid/{uuid}` asynchronously and applies the
+existing stream/codec validation before playback. The result must match the
+selected UUID. Moving, zooming, changing selection, leaving the map or exiting
+invalidates its generation, so a late response cannot start the wrong station.
+Repeated A during a pending lookup does not enqueue duplicate requests.
+A 64-entry session cache bounds resolved stream metadata. Browsing never
+registers a play-click; only an accepted explicit audio request does.
+
+The world has 1×, 2×, 4× and 8× map levels. `assets/atlas/` contains 85 opaque
+672×252 RGB tiles; a viewport draws no more than four cropped cached textures.
+The PNGs total about 2 MiB. Textures load as visited; even visiting every tile
+is about 55 MiB at four bytes per pixel. This is a fixed bound, not an unbounded
+remote map cache. The geographic Lua snapshot is about 1.5 MiB on disk.
+Country selection optionally centers on the median of its actual coordinates;
+free map movement does not require a country/city hierarchy.
+
+The bundled snapshot changes through an app release, while stream details and
+search results come from the live directory. It remains visible offline; audio
+still needs a network connection. Existing preference/history keys are unchanged.
+
 ## Sources and artwork
 
-The map is baked from official **Natural Earth v5.1.2**, 1:110m administrative
+The basemap is baked from official **Natural Earth v5.1.2**, 1:110m administrative
 country GeoJSON, with a full-world equirectangular projection. The exact transform
 is `x = 24 + (lon + 180) / 360 * 672`,
 `y = 150 + (90 - lat) / 180 * 252`. Source, SHA-256, projection, license and asset
@@ -170,7 +203,9 @@ curl -L --fail https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5
 python3 tools/render_assets.py /tmp/frequency-map.geojson
 ```
 
-The generator writes both `assets/icon.png` and the launcher's `icon.png`, plus
+For the geographic atlas and its density tiles, run `python3 tools/build_atlas.py`
+with Pillow in a development virtual environment. See [release maintenance](releasing.md)
+for the fetch, validation and reproducibility workflow. The original artwork generator writes both `assets/icon.png` and the launcher's `icon.png`, plus
 `world.png`, two pin PNGs and attribution metadata. The runtime draws only visible
 rows and cached images. It uses opaque rectangular primitives, avoiding the
 software renderer's SDL_gfx rounded-shape color issue. Error/notice space reduces
@@ -184,8 +219,8 @@ running the actual cartridge modules and lifecycle callbacks:
 
 ```sh
 cargo test -p cartridge-lua --test frequency
-cargo run --bin app-check -- frequency --fixture sim/fixtures/frequency.json --capture 1,12,45 --frames 60
-cargo run --bin app-check -- frequency --fixture sim/fixtures/frequency.json --press 10:a --capture 35 --frames 40
+cargo run --bin app-check -- /path/to/frequency-cartridge --fixture sim/fixtures/frequency.json --capture 1,12,45 --frames 60
+cargo run --bin app-check -- /path/to/frequency-cartridge --fixture sim/fixtures/frequency.json --press 10:a --capture 35 --frames 40
 ```
 
 The fixture is explicitly synthetic: every station is labeled `[fixture]`, stream
