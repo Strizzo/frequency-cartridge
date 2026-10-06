@@ -7,8 +7,9 @@ visible offline. Country, genre and name searches use Radio Browser's live
 100-record pages independently of the map. Stations without coordinates remain
 available through search; the app never substitutes invented locations.
 
-- In the station list: D-pad selects stations; Right enters the map; Left opens countries.
-- On the map: D-pad moves the cursor; X/Y zoom in/out at 1×, 2×, 4× and 8×.
+- In lists, countries, menus and settings: left stick or D-pad navigates. In station lists, right enters the map and left opens countries.
+- On the map: left stick pans at a speed proportional to its deflection; D-pad still moves the cursor.
+- Right stick up/down or X/Y zooms in/out at 1×, 2×, 4× and 8×. Recenter the right stick between zoom steps.
 - L1/R1 choose nearby map stations; A fetches current stream details and tunes; B returns to the list.
 - In lists: A plays/pauses, X saves a favorite, Y searches, and L1/R1 change genre.
 - L2/R2 adjust volume. Start opens the menu, including Save station for map selections.
@@ -29,7 +30,7 @@ See the [API, storage, attribution, and integration guide](docs/frequency.md).
 
 ## Install and run
 
-Requires **Cartridge 0.6.0 or newer**. App ID: `dev.cartridge.frequency`.
+Requires **Cartridge 0.6.2 or newer**. App ID: `dev.cartridge.frequency`.
 The release requires these runtime permissions: `network`, `audio`, `storage`.
 
 Download [`dev.cartridge.frequency.tar.gz`](https://github.com/Strizzo/frequency-cartridge/releases/latest)
@@ -46,6 +47,11 @@ cd /path/to/Cartridge
 ./sim.sh app /path/to/frequency-cartridge
 ```
 
+Simulator stick keys: **I/J/K/L = left up/left/down/right**, and
+**T/F/G/H = right up/left/down/right**. Existing digital button bindings still work.
+Release the stick keys to recenter. Opening a menu or keyboard, or changing views,
+stops stick motion; a stick held through that change must recenter before reuse.
+
 ## Development and releases
 
 Python 3.12+ and Lua 5.4 are sufficient for the independent checks:
@@ -56,8 +62,9 @@ find . -type f -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -n 1 luac 
 lua tests/unit.lua
 lua tests/atlas.lua
 lua tests/app_atlas.lua
+lua tests/app_sticks.lua
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-python3 tools/package.py --tag v1.1.0
+python3 tools/package.py --tag v1.2.0
 ```
 
 On Linux, Lua executables may be named `lua5.4` and `luac5.4`.

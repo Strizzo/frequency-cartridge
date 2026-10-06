@@ -12,7 +12,7 @@ import tarfile
 
 APP_ID = "dev.cartridge.frequency"
 REPOSITORY = "Strizzo/frequency-cartridge"
-MIN_RUNTIME = "0.6.0"
+MIN_RUNTIME = "0.6.2"
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
 

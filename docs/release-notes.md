@@ -1,22 +1,24 @@
-# Frequency 1.1.0
+# Frequency 1.2.0
 
-The map now shows worldwide radio coverage immediately instead of only the
-current search page: 13,179 contributor-reported station locations across
-182 country codes, including 215 in Italy. The bundled atlas was built on
-7 October 2026; map dots are clusters of real coordinates, not a guarantee of
-stream availability or compatibility.
+Frequency now supports both analog sticks. In the worldwide map, the left stick
+pans proportionally to its deflection and elapsed time. Tilt the right stick up
+to zoom in or down to zoom out through 1×, 2×, 4× and 8×. Each tilt takes one step;
+recenter between steps. D-pad, X/Y zoom, L1/R1 station selection and all other
+digital controls remain available.
 
-Move freely with the D-pad, zoom with X/Y (1×–8×), choose nearby stations with
-L1/R1, and press A to retrieve current stream details and listen. B returns to
-search. Country selection is an optional shortcut; country menus are not
-required to explore the world. Save a tuned map station through Start → Save station.
+The left stick also navigates station lists, menus, countries and settings,
+including country pages and the Volume row. Opening a menu/keyboard or changing
+views stops held motion; recenter before using that stick again. In the simulator,
+I/J/K/L controls the left stick and T/F/G/H controls the right stick.
 
-The world map works offline. Search and stream lookups remain asynchronous;
-moving the cursor cancels late tuning results. Opening Frequency never starts
-audio. Map artwork uses at most four cached tile draws per frame and no idle
-animation. Favorites, history and custom streams keep their existing storage.
+Panning and zooming use the existing offline atlas without network requests or
+idle animation. Nearby stations refresh at a bounded rate during visible pan,
+and every visible cursor move immediately cancels stale tuning results. The
+7 October 2026 atlas assets, stored favorites/history and audio behavior remain
+unchanged. Opening Frequency never starts audio.
 
-Requires CartridgeOS 0.6.0 or newer. Install or update Frequency from the Store
-over Wi-Fi; no SD-card transfer or OS update is needed. Permissions remain
-network, audio and storage. Native codec limitations are unchanged: HLS, Opus
-and HE-AAC are unsupported, and listening still needs a reachable broadcaster.
+Requires CartridgeOS 0.6.2 or newer for the stick callback and held-stick update
+rate. Update the runtime first if necessary, then install/update Frequency from
+Store over Wi-Fi. Permissions remain network, audio and storage. Native codec
+limitations remain: HLS, Opus and HE-AAC are unsupported; listening requires a
+reachable broadcaster.

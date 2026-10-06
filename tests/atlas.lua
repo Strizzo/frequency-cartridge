@@ -30,6 +30,27 @@ for i=1,5 do a:magnify(-1) end;assert(a.zoom==1)
 a:country('');assert(a.zoom==1 and a.u==0.5 and a.v==0.5)
 print('Atlas: global index, Italy selection, nearest ordering, 1/2/4/8x tiles and finite bounds passed')
 
+-- Pixel pan preserves fractional input, screen speed at every zoom, y sign,
+-- and clamps coordinates without reporting a change at a stationary edge.
+for _,zoom in ipairs({1,2,4,8}) do
+ a.zoom=zoom;a:set_cursor(0,0)
+ local u,v=a.u,a.v
+ assert(not a:pan_pixels(.1,.1),'fractional input below a pixel must stay quiet')
+ assert(a:pan_pixels(17.9,-9.1))
+ assert(math.abs((a.u-u)*672*zoom-18)<1e-9)
+ assert(math.abs((a.v-v)*252*zoom+9)<1e-9,'negative y must move north')
+ u,v=a.u,a.v
+ for _,p in ipairs({{0/0,0},{math.huge,0},{0,-math.huge},{'1',0}}) do
+  assert(not a:pan_pixels(p[1],p[2]));assert(a.u==u and a.v==v)
+ end
+ a:set_cursor(-90,180);u,v=a.u,a.v
+ assert(not a:pan_pixels(24,24));assert(a.u==u and a.v==v)
+ assert(a:move('dpad_left') and a:move('dpad_up'))
+ assert(not a:move('unknown'))
+end
+a.zoom=8;assert(not a:magnify(1));assert(a:magnify(-1) and a.zoom==4)
+a.zoom=1;assert(not a:magnify(-1));assert(a:magnify(1) and a.zoom==2)
+
 local actual=Atlas.new()
 assert(#actual.records>10000 and actual.countries>150,'worldwide asset coverage must not regress to a single directory page')
 assert(actual:country('IT'),'Italy must have actual coordinates')

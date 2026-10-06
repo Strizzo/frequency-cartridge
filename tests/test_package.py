@@ -46,7 +46,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(set(meta), {"id", "version", "url", "sha256", "size", "min_runtime", "permissions"})
         self.assertEqual(meta["id"], packager.APP_ID)
         self.assertEqual(meta["version"], self.version)
-        self.assertEqual(meta["min_runtime"], "0.6.0")
+        self.assertEqual(meta["min_runtime"], "0.6.2")
         self.assertEqual(meta["url"], f"https://github.com/{packager.REPOSITORY}/releases/download/{self.tag}/{package.name}")
         self.assertEqual(meta["sha256"], hashlib.sha256(package.read_bytes()).hexdigest())
         self.assertEqual(meta["size"], package.stat().st_size)
@@ -82,7 +82,8 @@ class PackageTests(unittest.TestCase):
         original = (self.root / "cartridge.json").read_bytes()
         changes = [{"id": "dev.cartridge.wrong"}, {"version": "01.0.0"}, {"version": "v1.0.0"},
                    {"version": "1.0.0/../../escape"}, {"version": 1}, {"min_runtime": "0.5.0"},
-                   {"min_runtime": None}, {"permissions": ["network", "network"]},
+                   {"min_runtime": "0.6.0"}, {"min_runtime": "0.6.1"}, {"min_runtime": None},
+                   {"permissions": ["network", "network"]},
                    {"permissions": ["shell"]}, {"permissions": [{}]}, {"entry": "../main.lua"}]
         for change in changes:
             with self.subTest(change=change):
